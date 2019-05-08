@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Online POS</title>
+  <script src="js/vue.min.js"></script>
+  <script src="js/jquery-3.3.1.min.js"></script>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+
+<body>
+  <h1>Studio POS</h1>
+  <div id="cart_app">
+
+    <div class='productPanel'>
+      <text-filter
+        v-on:filter_products='filterProducts'
+      ></text-filter>
+      <div class="productsList">
+        <product-list
+          v-for='(product, i) in product_view'
+          v-bind:product='product'
+          v-on:add_product='addProduct'
+          v-on:add_custom_product='addCustomProduct'
+        ></product-list>
+      </div>
+    </div>
+
+    <div class='cartPanel'>
+      <h2>CART</h2>
+      <table>
+        <!--<tr>
+          <th class='cart-product-thumbnail'></th>
+          <th class='cart-product-name'>Name</th>
+          <th class='cart-product-price'>Price</th>
+          <th class='cart-product-quantity'>Quantity</th>
+          <th class='cart-product-total'>Total</th>
+          <th class='cart-product-delete'>Remove</th>
+        </tr>-->
+        <tr
+          is='cart'
+          v-for='(product, i) in cartdata'
+          v-bind:product='product'
+          v-bind:i='i'
+          v-on:delete_product="deleteProduct"
+          ></tr>
+      </table>
+
+      <cart-actions
+        v-on:refresh="refresh"
+        v-on:update_cart="updateProducts"
+        v-on:add_coupon="addCoupon"
+      ></cart-actions>
+
+      <!--<form>
+        <shipping-picker
+          v-on:change_shipping="updateShippingMethod"
+          v-for='(method, i) in shipping_methods'
+          v-bind:method='method'
+          v-bind:i='i'
+        ></shipping-picker>
+      </form>-->
+
+      <cart-totals
+        v-bind:totals='totals'
+        v-bind:coupons='coupons'
+        v-bind:shipping_methods='shipping_methods'
+        v-on:delete_coupon='deleteCoupon'
+      ></cart-totals>
+
+    </div>
+
+    <div id="contentBlocker"></div>
+  </div><!--End of the app-->
+
+  <template id="coupons">
+    <!--<tr>
+      <td>Coupon: {{ code }}</td>
+      <td>{{ prettyPrice(discount) }}<button v-on:click="$emit('delete_coupon', code)">Remove</button></td>
+    </tr>-->
+    <div class='cartTable'>
+      <div class='left'>Coupon: {{ code }} - <button v-on:click="$emit('delete_coupon', code)">Remove</button></div>
+      <div class='right'>{{ prettyPrice(discount) }}</div>
+    </div>
+  </template>
+
+  <template id="cart-actions">
+    <div class='cartActions'>
+
+      <div class='updateButton cartTable'>
+        <!--<button v-on:click="$emit('refresh')">Refresh Cart</button>-->
+        <button v-on:click="$emit('update_cart')">Update Cart</button>
+      </div>
+      <div class='couponButton cartTable'>
+        <input
+          type="text"
+          v-bind:value='mcoupon_code'
+          v-on:input="mcoupon_code = $event.target.value"
+          placeholder="Promo Code"
+        >
+        <button v-on:click="$emit('add_coupon', mcoupon_code)">Apply</button>
+      </div>
+
+    </div>
+  </template>
+
+  <template id="cart-totals">
+    <div class='cartTotals'>
+      <div class='cartTable'>
+        <div class='left'>Subtotal</div>
+        <div class='right'>{{ prettyPrice(totals.subtotal) }}</div>
+      </div>
+
+      <coupons
+        v-for='(discount, code) in coupons'
+        v-bind:discount='discount'
+        v-bind:code='code'
+        v-on:delete_coupon="$emit('delete_coupon', $event)"
+      >
+      </coupons>
+      <div class='cartTable'>
+        <div class='left'>
+          Shipping
+          <form>
+            <shipping-picker
+              v-on:change_shipping="updateShippingMethod"
+              v-for='(method, i) in shipping_methods'
+              v-bind:method='method'
+              v-bind:i='i'
+            ></shipping-picker>
+          </form>
+        </div>
+        <div class='right'>{{ prettyPrice(totals.shipping) }}</div>
+      </div>
+      <div class='cartTable'>
+        <div class='left'>Tax</div>
+        <div class='right'>{{ prettyPrice(totals.tax) }}</div>
+      </div>
+      <div class='cartTable total'>
+        <div class='left'>Total</div>
+        <div class='right'>{{ prettyPrice(totals.total) }}</div>
+      </div>
+      <div class='proceed'>
+        <a href="/pos-checkout/">
+          Proceed To Checkout
+        </a>
+      </div>
+    </div>
+  </template>
+
+  <template id="cart">
+    <tr v-bind:rel='product.key'>
+      <td class='cart-product-thumbnail'><img v-bind:src='product.item.image'></td>
+      <!--<td>{{ product.item.product_id }}</td>-->
+      <td class='cart-product-name'>{{ product.item.name }}</td>
+      <td class='cart-product-price'>{{ prettyPrice(product.item.price) }}</td>
+      <td class='cart-product-quantity'><input type="number" size="3" min=0 v-model="product.item.quantity"  v-bind:max='product.item.stock'></td>
+      <td class='cart-product-total'>{{ prettyPrice(calcTotal(i)) }}</td>
+      <td class='cart-product-delete'><button v-on:click="$emit('delete_product', i)">X</button></td>
+    </tr>
+  </template>
+
+  <template id="product-list">
+
+    <div v-if="product.id == '1610' || (product.id >= '2258' && product.id <= '2262')">
+      <custom-product
+        v-bind:id='product.id'
+        v-bind:productname='product.name'
+        v-on:add_custom_product='add_custom_product'
+      ></custom-product>
+    </div>
+    <div v-else-if="product.variations == null">
+      <a v-on:click="$emit('add_product', product.id)" class='POSProductLink'>
+        <div class='simpleProduct'>
+          {{ product.id }} - {{ product.name }} - {{ prettyPrice(product.price) }}
+          <span v-html="product.img"></span>
+        </div>
+      </a>
+    </div>
+    <div v-else >
+      <div class='variableProduct'>
+
+        <div class='variations'>
+          <div v-for='variation in product.variations' >
+            <a v-on:click="$emit('add_product', variation.id)" class='POSProductLink'>
+              <div>{{ variation.id }} - {{ variation.name }} - {{ prettyPrice(variation.price) }} (Variation)</div>
+            </a>
+          </div>
+        </div>
+
+        <span v-html="product.img"></span>
+      </div>
+    </div>
+
+  </template>
+
+  <template id="custom-product">
+    <div class='customProduct'>
+      {{ productname }}:
+      <input type="text" placeholder="Custom Product Name" v-model="name">
+      <input type="number" placeholder="Custom Price" v-model="price">
+      <button v-on:click="add_custom_product(id, 'test', '546')">Add Custom Product</button>
+    </div>
+  </template>
+
+  <template id="text-filter">
+    <div class='nameFilter'>
+      <input
+        type="text"
+        v-bind:value="mfilter"
+        v-on:input="mfilter = $event.target.value; $emit('filter_products', mfilter)"
+        placeholder="Type Here to Filter the Products"
+      >
+      <div class='clearSearch' v-on:click="clearSearch()">X</div>
+    </div>
+  </template>
+
+  <template id="shipping-picker">
+    <div class="">
+      <input
+        type="radio"
+        name="shipping_picker"
+        v-bind:value="method.id+':'+method.instance_id"
+        v-bind:checked="method.selected"
+        v-on:click="$emit('change_shipping', method.id+':'+method.instance_id)"
+      >
+        {{ method.title }}
+      </input>
+    </div>
+  </template>
+
+  <script src="js/cart.js"></script>
+</body>
+
+</html>
